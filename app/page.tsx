@@ -15,6 +15,9 @@ const money = (n: number) => new Intl.NumberFormat("fa-IR").format(n) + " توم
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [pendingProducts, setPendingProducts] = useState<Product[]>([]);
+  const [sellerApplications, setSellerApplications] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<any>(null);
   const [tab, setTab] = useState<"all" | "free" | "paid">("all");
@@ -22,6 +25,22 @@ export default function Home() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
   const [panel, setPanel] = useState<"none" | "upload" | "settings" | "admin">("none");
+  const [uploadStep, setUploadStep] = useState(0);
+  const [adminUsers, setAdminUsers] = useState<Profile[]>([]);
+  const [ordinaryUsers, setOrdinaryUsers] = useState<Profile[]>([]);
+  const [selectedAdmin, setSelectedAdmin] = useState("");
+  const [myPermissions, setMyPermissions] = useState({
+    can_review_products: false,
+    can_review_sellers: false,
+    can_handle_reports: false,
+    can_manage_users: false
+  });
+  const [adminPermissions, setAdminPermissions] = useState({
+    can_review_products: true,
+    can_review_sellers: false,
+    can_handle_reports: true,
+    can_manage_users: false
+  });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -34,10 +53,110 @@ export default function Home() {
     `${p.name} ${p.description} ${p.category}`.toLowerCase().includes(query.toLowerCase())
   ), [products, tab, query]);
 
+  async function loadMyPermissions(userId: string) {
+    if (!supabase) return;
+    const { data } = await supabase.from("admin_permissions")
+      .select("can_review_products,can_review_sellers,can_handle_reports,can_manage_users")
+      .eq("admin_id", userId).maybeSingle();
+    setMyPermissions({
+      can_review_products: data?.can_review_products ?? false,
+      can_review_sellers: data?.can_review_sellers ?? false,
+      can_handle_reports: data?.can_handle_reports ?? false,
+      can_manage_users: data?.can_manage_users ?? false
+    });
+  }
+
+  async function loadAdmins() {
+    if (!supabase || profile?.role !== "owner") return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id,username,role")
+      .eq("role", "admin")
+      .order("username");
+    if (error) {
+      setNotice("دریافت فهرست مدیران ناموفق بود: " + error.message);
+      return;
+    }
+    setAdminUsers((data || []) as Profile[]);
+  }
+
+  async function loadOrdinaryUsers() {
+    if (!supabase || profile?.role !== "owner") return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id,username,role")
+      .eq("role", "user")
+      .order("username");
+    if (error) {
+      setNotice("دریافت کاربران ناموفق بود: " + error.message);
+      return;
+    }
+    setOrdinaryUsers((data || []) as Profile[]);
+  }
+
   async function loadProducts() {
     if (!supabase) return;
     const { data, error } = await supabase.from("products").select("*").eq("status", "approved").order("created_at", { ascending: false });
     if (!error && data) setProducts(data as Product[]);
+  }
+
+  async function loadReports() {
+    if (!supabase || !profile || (profile.role !== "owner" && !(profile.role === "admin" && myPermissions.can_handle_reports))) return;
+    const { data, error } = await supabase.from("reports")
+      .select("*").eq("status", "open").order("created_at", { ascending: true });
+    if (error) {
+      setNotice("دریافت گزارش‌ها ناموفق بود: " + error.message);
+      return;
+    }
+    setReports(data || []);
+  }
+
+  async function updateReportStatus(id: string, status: "resolved" | "rejected") {
+    if (!supabase || (profile?.role !== "owner" && !(profile?.role === "admin" && myPermissions.can_handle_reports))) return;
+    setBusy(true);
+    const { error } = await supabase.from("reports").update({ status }).eq("id", id);
+    setNotice(error ? "خطا: " + error.message : "وضعیت گزارش به‌روزرسانی شد.");
+    await loadReports();
+    setBusy(false);
+  }
+
+  async function loadSellerApplications() {
+    if (!supabase || !profile || (profile.role !== "owner" && !(profile.role === "admin" && myPermissions.can_review_sellers))) return;
+    const { data, error } = await supabase.from("seller_applications")
+      .select("id,user_id,status,message,created_at")
+      .eq("status", "pending").order("created_at", { ascending: true });
+    if (error) {
+      setNotice("دریافت درخواست‌های فروشندگی ناموفق بود: " + error.message);
+      return;
+    }
+    setSellerApplications(data || []);
+  }
+
+  async function reviewSellerApplication(id: string, userId: string, approved: boolean) {
+    if (!supabase || (profile?.role !== "owner" && !(profile?.role === "admin" && myPermissions.can_review_sellers))) return;
+    setBusy(true);
+    const { error: reviewError } = await supabase.from("seller_applications")
+      .update({ status: approved ? "approved" : "rejected", reviewed_by: session.user.id, reviewed_at: new Date().toISOString() })
+      .eq("id", id);
+    if (!reviewError && approved) {
+      const { error } = await supabase.from("profiles").update({ role: "seller" }).eq("id", userId).eq("role", "user");
+      if (error) setNotice("درخواست ثبت شد اما تغییر نقش ناموفق بود: " + error.message);
+    }
+    if (reviewError) setNotice(reviewError.message);
+    else if (approved) setNotice("درخواست تأیید و نقش فروشنده فعال شد.");
+    else setNotice("درخواست فروشندگی رد شد.");
+    await loadSellerApplications();
+    setBusy(false);
+  }
+
+  async function loadPendingProducts() {
+    if (!supabase || !profile || (profile.role !== "owner" && !(profile.role === "admin" && myPermissions.can_review_products))) return;
+    const { data, error } = await supabase.from("products").select("*").eq("status", "pending").order("created_at", { ascending: true });
+    if (error) {
+      setNotice("دریافت محصولات در انتظار بررسی ناموفق بود: " + error.message);
+      return;
+    }
+    setPendingProducts((data || []) as Product[]);
   }
   async function loadProfile(userId: string) {
     if (!supabase) return;
@@ -58,6 +177,112 @@ export default function Home() {
     });
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (profile?.role === "admin") loadMyPermissions(profile.id);
+    else setMyPermissions({ can_review_products: false, can_review_sellers: false, can_handle_reports: false, can_manage_users: false });
+  }, [profile?.id, profile?.role]);
+
+  useEffect(() => {
+    if (profile?.role === "owner") {
+      loadAdmins();
+      loadOrdinaryUsers();
+    } else {
+      setAdminUsers([]);
+      setOrdinaryUsers([]);
+    }
+  }, [profile?.id, profile?.role]);
+
+  useEffect(() => {
+    if (panel === "admin" && (profile?.role === "owner" || profile?.role === "admin")) {
+      loadPendingProducts();
+      loadSellerApplications();
+      loadReports();
+    }
+  }, [panel, profile?.id, profile?.role, myPermissions.can_review_products, myPermissions.can_review_sellers, myPermissions.can_handle_reports]);
+
+  async function promoteAdmin(userId: string) {
+    if (!supabase || profile?.role !== "owner") return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const { error: permissionError } = await supabase
+        .from("admin_permissions")
+        .upsert({ admin_id: userId }, { onConflict: "admin_id" });
+      if (permissionError) throw permissionError;
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role: "admin" })
+        .eq("id", userId)
+        .eq("role", "user");
+      if (error) throw error;
+
+      await loadAdmins();
+      setNotice("دسترسی مدیریتی با موفقیت فعال شد.");
+    } catch (err: any) {
+      setNotice(err.message || "ارتقای کاربر ناموفق بود.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function demoteAdmin(userId: string) {
+    if (!supabase || profile?.role !== "owner") return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role: "user" })
+        .eq("id", userId)
+        .eq("role", "admin");
+      if (error) throw error;
+
+      const { error: permissionError } = await supabase
+        .from("admin_permissions")
+        .delete()
+        .eq("admin_id", userId);
+      if (permissionError) throw permissionError;
+
+      await loadAdmins();
+      setNotice("دسترسی مدیریتی لغو شد؛ حساب کاربری حذف نشده است.");
+    } catch (err: any) {
+      setNotice(err.message || "لغو دسترسی ناموفق بود.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadAdminPermissions(adminId: string) {
+    if (!supabase || profile?.role !== "owner") return;
+    setSelectedAdmin(adminId);
+    const { data, error } = await supabase
+      .from("admin_permissions")
+      .select("can_review_products,can_review_sellers,can_handle_reports,can_manage_users")
+      .eq("admin_id", adminId)
+      .maybeSingle();
+    if (error) {
+      setNotice("دریافت مجوزها ناموفق بود: " + error.message);
+      return;
+    }
+    setAdminPermissions({
+      can_review_products: data?.can_review_products ?? true,
+      can_review_sellers: data?.can_review_sellers ?? false,
+      can_handle_reports: data?.can_handle_reports ?? true,
+      can_manage_users: data?.can_manage_users ?? false
+    });
+  }
+
+  async function saveAdminPermissions() {
+    if (!supabase || profile?.role !== "owner" || !selectedAdmin) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("admin_permissions")
+      .upsert({ admin_id: selectedAdmin, ...adminPermissions }, { onConflict: "admin_id" });
+    setBusy(false);
+    setNotice(error ? "ذخیره مجوزها ناموفق بود: " + error.message : "مجوزهای مدیر ذخیره شدند.");
+  }
 
   async function submitAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -116,8 +341,18 @@ export default function Home() {
   }
 
   async function moderate(id: string, status: "approved" | "rejected") {
-    const { error } = await supabase!.from("products").update({ status }).eq("id", id);
-    setNotice(error ? error.message : "وضعیت محصول تغییر کرد."); await loadProducts();
+    if (!supabase || !profile || (profile.role !== "owner" && !(profile.role === "admin" && myPermissions.can_review_products))) return;
+    const reason = status === "rejected" ? window.prompt("Enter rejection reason:") : null;
+    if (status === "rejected" && !reason?.trim()) return;
+    setBusy(true);
+    const { error } = await supabase.from("products")
+      .update({ status, rejection_reason: status === "rejected" ? reason!.trim() : null })
+      .eq("id", id);
+    if (error) setNotice("خطا: " + error.message);
+    else setNotice(status === "approved" ? "پلاگین تأیید شد." : "پلاگین با ثبت دلیل رد شد.");
+    await loadProducts();
+    await loadPendingProducts();
+    setBusy(false);
   }
 
   return <main>
@@ -184,7 +419,54 @@ export default function Home() {
     {panel!=="none" && <div className="modal-backdrop" onClick={()=>setPanel("none")}><div className="modal wide" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setPanel("none")}><X/></button>
       {panel==="upload" && <><div className="eyebrow">CREATOR STUDIO</div><h2>ثبت پلاگین جدید</h2><form className="form-grid" onSubmit={submitProduct}><label>نام پلاگین<input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>دسته‌بندی<input required value={form.category} onChange={e=>setForm({...form,category:e.target.value})}/></label><label className="span-two">توضیحات<textarea required rows={4} value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></label><label>نسخه پلاگین<input required value={form.version} onChange={e=>setForm({...form,version:e.target.value})}/></label><label>نسخه‌های ماینکرفت<input required value={form.mc} onChange={e=>setForm({...form,mc:e.target.value})}/></label><label>پلتفرم‌ها<input value={form.platform} onChange={e=>setForm({...form,platform:e.target.value})}/></label><label className="check-label"><input type="checkbox" checked={form.free} onChange={e=>setForm({...form,free:e.target.checked})}/> پلاگین رایگان است</label>{!form.free&&<label>قیمت به تومان<input type="number" min="1000" required value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></label>}<label className="span-two">فایل پلاگین (JAR)<input type="file" accept=".jar,application/java-archive" required onChange={e=>setForm({...form,file:e.target.files?.[0]||null})}/><small>حداکثر ۱۰۰ مگابایت؛ فایل پس از بارگذاری برای بررسی ذخیره می‌شود.</small></label><button className="btn primary span-two" disabled={busy}>{busy?"در حال ارسال...":"ارسال برای بررسی"}</button></form></>}
       {panel==="settings" && <><div className="eyebrow">PRIVATE OWNER AREA</div><h2>تنظیمات مالک سایت</h2><div className="owner-warning"><ShieldCheck/> این بخش فقط برای نقش Owner است. دسترسی واقعی توسط سیاست‌های دیتابیس کنترل می‌شود.</div><div className="settings-list"><div><b>مدیریت محصولات</b><span>افزودن، ویرایش، حذف و انتشار محصولات خودت</span></div><div><b>مدیریت مدیران</b><span>تعیین مجوزهای محدود برای هر مدیر</span></div><div><b>کمیسیون و تسویه</b><span>تنظیم سهم پلتفرم و فروشندگان (پس از اتصال پرداخت)</span></div><div><b>تنظیمات سایت</b><span>نام، پشتیبانی، دسته‌بندی‌ها و سیاست‌ها</span></div><div><b>کاربران و فروشندگان</b><span>تغییر نقش، تعلیق و بررسی درخواست‌ها</span></div></div><p className="form-hint">این رابط پایه است؛ عملیات حساس در نسخه سرور و با RLS پیاده‌سازی می‌شوند.</p></>}
-      {panel==="admin" && <><div className="eyebrow">MODERATION CENTER</div><h2>پنل بررسی مدیریت</h2><p>در این نسخه، بررسی درخواست‌ها از طریق جدول‌های مدیریتی Supabase انجام می‌شود. پنل عملیاتی کامل در مرحله بعد به همین رابط متصل خواهد شد.</p><button className="btn outline" onClick={()=>setPanel("none")}>بستن</button></>}
+      {panel==="admin" && <><div className="eyebrow">RPCRAFT CONTROL CENTER</div><h2>{profile?.role==="owner"?"پنل اختصاصی Owner":"پنل مدیریت"}</h2>
+        {profile?.role==="owner" ? <><div className="owner-warning"><ShieldCheck/> مدیریت حساب‌ها و سطح دسترسی مدیران فقط در اختیار Owner است.</div><h3>مدیران فعال ({adminUsers.length})</h3>
+          {adminUsers.length ? <div className="settings-list">{adminUsers.map(admin=><div key={admin.id}><b>{admin.username}</b><span>شناسه: {admin.id}</span><button className="btn outline small" onClick={()=>loadAdminPermissions(admin.id)}>تنظیم مجوزها</button><button className="btn outline small" disabled={busy} onClick={()=>demoteAdmin(admin.id)}>لغو دسترسی Admin</button></div>)}</div> : <p className="form-hint">هنوز مدیری اضافه نشده است.</p>}
+          {selectedAdmin && <div className="settings-list"><h3>مجوزهای مدیر انتخاب‌شده</h3>
+            <label><input type="checkbox" checked={adminPermissions.can_review_products} onChange={e=>setAdminPermissions({...adminPermissions,can_review_products:e.target.checked})}/> بررسی و تأیید پلاگین‌ها</label>
+            <label><input type="checkbox" checked={adminPermissions.can_review_sellers} onChange={e=>setAdminPermissions({...adminPermissions,can_review_sellers:e.target.checked})}/> بررسی درخواست فروشندگی</label>
+            <label><input type="checkbox" checked={adminPermissions.can_handle_reports} onChange={e=>setAdminPermissions({...adminPermissions,can_handle_reports:e.target.checked})}/> رسیدگی به گزارش‌ها</label>
+            <label><input type="checkbox" checked={adminPermissions.can_manage_users} onChange={e=>setAdminPermissions({...adminPermissions,can_manage_users:e.target.checked})}/> مدیریت کاربران</label>
+            <button className="btn primary small" disabled={busy} onClick={saveAdminPermissions}>ذخیره مجوزها</button>
+          </div>}
+          <h3>کاربران عادی ({ordinaryUsers.length})</h3>
+          {ordinaryUsers.length ? <div className="settings-list">{ordinaryUsers.map(user=><div key={user.id}><b>{user.username}</b><span>شناسه: {user.id}</span><button className="btn primary small" disabled={busy} onClick={()=>promoteAdmin(user.id)}>ارتقا به Admin</button></div>)}</div> : <p className="form-hint">کاربر عادی برای نمایش وجود ندارد.</p>}
+        </> : null}
+        {(profile?.role==="owner" || profile?.role==="admin") && <>
+          <h3>محصولات در انتظار بررسی ({pendingProducts.length})</h3>
+          {pendingProducts.length ? <div className="settings-list">{pendingProducts.map(product=><div key={product.id}>
+            <b>{product.name} — نسخه {product.version}</b>
+            <span>{product.description}</span>
+            <span>پلتفرم: {product.platform.join(" / ")} | سازنده: {product.author_id}</span>
+            <div className="top-actions">
+              <button className="btn primary small" disabled={busy} onClick={()=>moderate(product.id,"approved")}>تأیید و انتشار</button>
+              <button className="btn outline small" disabled={busy} onClick={()=>moderate(product.id,"rejected")}>رد محصول</button>
+            </div>
+          </div>)}</div> : <p className="form-hint">محصولی در انتظار بررسی نیست یا دسترسی بررسی محصولات را نداری.</p>}
+        </>}
+        {(profile?.role==="owner" || myPermissions.can_review_sellers) && <>
+          <h3>درخواست‌های فروشندگی ({sellerApplications.length})</h3>
+          {sellerApplications.length ? <div className="settings-list">{sellerApplications.map(app=><div key={app.id}>
+            <b>درخواست فروشندگی</b><span>شناسه کاربر: {app.user_id}</span>
+            <div className="top-actions">
+              <button className="btn primary small" disabled={busy} onClick={()=>reviewSellerApplication(app.id,app.user_id,true)}>تأیید</button>
+              <button className="btn outline small" disabled={busy} onClick={()=>reviewSellerApplication(app.id,app.user_id,false)}>رد درخواست</button>
+            </div>
+          </div>)}</div> : <p className="form-hint">درخواست فروشندگی در انتظاری وجود ندارد.</p>}
+        </>}
+        {(profile?.role==="owner" || myPermissions.can_handle_reports) && <>
+          <h3>گزارش‌های باز ({reports.length})</h3>
+          {reports.length ? <div className="settings-list">{reports.map(report=><div key={report.id}>
+            <b>گزارش #{report.id}</b>
+            <span>محصول: {report.product_id || "نامشخص"}</span>
+            <p>{report.reason}</p>
+            <div className="top-actions">
+              <button className="btn primary small" disabled={busy} onClick={()=>updateReportStatus(report.id,"resolved")}>حل‌شده</button>
+              <button className="btn outline small" disabled={busy} onClick={()=>updateReportStatus(report.id,"rejected")}>رد گزارش</button>
+            </div>
+          </div>)}</div> : <p className="form-hint">گزارش بازی وجود ندارد.</p>}
+        </>}
+        <button className="btn outline" onClick={()=>setPanel("none")}>بستن</button></>}
     </div></div>}
   </main>;
 }
