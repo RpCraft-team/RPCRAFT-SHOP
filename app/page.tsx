@@ -45,7 +45,7 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [auth, setAuth] = useState({ username: "", email: "", phone: "", password: "" });
-  const [form, setForm] = useState({ name: "", description: "", price: "0", version: "1.0.0", mc: "1.21.1", platform: "Paper,Spigot,Purpur", category: "ابزار", free: true, file: null as File | null });
+  const [form, setForm] = useState({ name: "", description: "", price: "0", version: "1.0.0", mc: "1.21.1", platform: "Paper,Spigot,Purpur", category: "ابزار", free: true, file: null as File | null, iconFile: null as File | null });
 
   const configured = !!supabase;
   const visibleProducts = useMemo(() => products.filter(p =>
@@ -321,8 +321,17 @@ export default function Home() {
       filePath = `${session.user.id}/${crypto.randomUUID()}-${form.file.name}`;
       const { error: uploadError } = await supabase.storage.from("plugin-jars").upload(filePath, form.file, { contentType: "application/java-archive", upsert: false });
       if (uploadError) throw uploadError;
+      let iconUrl: string | null = null;
+      if (form.iconFile) {
+        if (!form.iconFile.type.startsWith("image/")) throw new Error("فایل آیکون باید تصویر باشد.");
+        if (form.iconFile.size > 5 * 1024 * 1024) throw new Error("حداکثر حجم آیکون ۵ مگابایت است.");
+        const iconPath = `${session.user.id}/${crypto.randomUUID()}-${form.iconFile.name}`;
+        const { error: iconError } = await supabase.storage.from("plugin-icons").upload(iconPath, form.iconFile, { contentType: form.iconFile.type, upsert: false });
+        if (iconError) throw iconError;
+        iconUrl = supabase.storage.from("plugin-icons").getPublicUrl(iconPath).data.publicUrl;
+      }
       const { error } = await supabase.from("products").insert({
-        name: form.name, description: form.description, price: form.free ? 0 : Number(form.price),
+        name: form.name, description: form.description, icon_url: iconUrl, price: form.free ? 0 : Number(form.price),
         is_free: form.free, version: form.version, minecraft_versions: form.mc.split(",").map(x => x.trim()).filter(Boolean),
         platform: form.platform.split(",").map(x => x.trim()).filter(Boolean), category: form.category,
         file_path: filePath, author_id: session.user.id, status: profile.role === "owner" ? "approved" : "pending"
@@ -422,7 +431,7 @@ export default function Home() {
       <form className="form-grid" onSubmit={submitProduct}>
       {uploadStep===0 && <><label>نام پلاگین<input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="نام پلاگین"/></label><label>دسته‌بندی<input required value={form.category} onChange={e=>setForm({...form,category:e.target.value})} placeholder="مثلاً ابزار، اقتصاد، مدیریت"/></label><label className="span-two">توضیحات کامل پلاگین<textarea required rows={5} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="امکانات و ویژگی‌های پلاگین را توضیح بده..."/></label><button type="button" className="btn primary span-two" onClick={()=>{if(!form.name.trim()||!form.category.trim()||!form.description.trim()){setNotice("لطفاً تمام مشخصات این مرحله را تکمیل کن.");return;}setNotice("");setUploadStep(1);}}>مرحله بعدی</button></>}
       {uploadStep===1 && <><label>نسخه پلاگین<input required value={form.version} onChange={e=>setForm({...form,version:e.target.value})} placeholder="1.0.0"/></label><label>نسخه‌های ماینکرفت<input required value={form.mc} onChange={e=>setForm({...form,mc:e.target.value})} placeholder="1.21.1, 1.21.4"/></label><label className="span-two">پلتفرم‌های پشتیبانی‌شده<input value={form.platform} onChange={e=>setForm({...form,platform:e.target.value})} placeholder="Paper, Spigot, Purpur"/></label><label className="check-label"><input type="checkbox" checked={form.free} onChange={e=>setForm({...form,free:e.target.checked})}/> پلاگین رایگان است</label>{!form.free&&<label>قیمت به تومان<input type="number" min="1000" required value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></label>}<div className="span-two upload-actions"><button type="button" className="btn outline" onClick={()=>setUploadStep(0)}>مرحله قبل</button><button type="button" className="btn primary" onClick={()=>{if(!form.version.trim()||!form.mc.trim()||(!form.free&&Number(form.price)<1000)){setNotice("اطلاعات نسخه و قیمت را بررسی کن.");return;}setNotice("");setUploadStep(2);}}>مرحله بعدی</button></div></>}
-      {uploadStep===2 && <><div className="span-two upload-file-panel"><UploadCloud size={34}/><b>فایل اصلی پلاگین را انتخاب کن</b><p>فقط فایل JAR با حداکثر حجم ۱۰۰ مگابایت</p><input type="file" accept=".jar,application/java-archive" required onChange={e=>setForm({...form,file:e.target.files?.[0]||null})}/>{form.file&&<small>فایل انتخاب‌شده: {form.file.name}</small>}</div><div className="span-two upload-actions"><button type="button" className="btn outline" onClick={()=>setUploadStep(1)}>مرحله قبل</button><button type="submit" className="btn primary" disabled={busy||!form.file}>{busy?"در حال ارسال...":"ارسال برای بررسی"}</button></div></>}
+      {uploadStep===2 && <><div className="span-two upload-file-panel"><UploadCloud size={34}/><b>آیکون اختصاصی پلاگین (اختیاری)</b><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={e=>setForm({...form,iconFile:e.target.files?.[0]||null})}/>{form.iconFile&&<small>آیکون: {form.iconFile.name}</small>}<b>فایل اصلی پلاگین را انتخاب کن</b><p>فقط فایل JAR با حداکثر حجم ۱۰۰ مگابایت</p><input type="file" accept=".jar,application/java-archive" required onChange={e=>setForm({...form,file:e.target.files?.[0]||null})}/>{form.file&&<small>فایل انتخاب‌شده: {form.file.name}</small>}</div><div className="span-two upload-actions"><button type="button" className="btn outline" onClick={()=>setUploadStep(1)}>مرحله قبل</button><button type="submit" className="btn primary" disabled={busy||!form.file}>{busy?"در حال ارسال...":"ارسال برای بررسی"}</button></div></>}
       </form></>}
       {panel==="settings" && <><div className="eyebrow">PRIVATE OWNER AREA</div><h2>تنظیمات مالک سایت</h2><div className="owner-warning"><ShieldCheck/> این بخش فقط برای نقش Owner است. دسترسی واقعی توسط سیاست‌های دیتابیس کنترل می‌شود.</div><div className="settings-list"><div><b>مدیریت محصولات</b><span>افزودن، ویرایش، حذف و انتشار محصولات خودت</span></div><div><b>مدیریت مدیران</b><span>تعیین مجوزهای محدود برای هر مدیر</span></div><div><b>کمیسیون و تسویه</b><span>تنظیم سهم پلتفرم و فروشندگان (پس از اتصال پرداخت)</span></div><div><b>تنظیمات سایت</b><span>نام، پشتیبانی، دسته‌بندی‌ها و سیاست‌ها</span></div><div><b>کاربران و فروشندگان</b><span>تغییر نقش، تعلیق و بررسی درخواست‌ها</span></div></div><p className="form-hint">این رابط پایه است؛ عملیات حساس در نسخه سرور و با RLS پیاده‌سازی می‌شوند.</p></>}
       {panel==="admin" && <><div className="eyebrow">RPCRAFT CONTROL CENTER</div><h2>{profile?.role==="owner"?"پنل اختصاصی Owner":"پنل مدیریت"}</h2>
