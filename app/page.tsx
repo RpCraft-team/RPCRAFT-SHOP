@@ -402,7 +402,7 @@ export default function Home() {
       <div className="section-heading"><div><div className="eyebrow">EXPLORE MARKETPLACE</div><h2>ویترین پلاگین‌ها</h2><p>محصولات تأییدشده جامعه سازندگان</p></div><div className="searchbox"><Search size={18}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="جست‌وجوی پلاگین..."/></div></div>
       <div className="filters"><button className={tab==="all"?"active":""} onClick={()=>setTab("all")}>همه</button><button className={tab==="free"?"active":""} onClick={()=>setTab("free")}>رایگان</button><button className={tab==="paid"?"active":""} onClick={()=>setTab("paid")}>پولی</button></div>
       {!configured ? <div className="empty-state"><ShieldCheck/><h3>اتصال دیتابیس هنوز انجام نشده</h3><p>برای نمایش محصولات واقعی، پروژه Supabase را طبق راهنمای README متصل کن. هیچ محصول نمونه و ساختگی در فروشگاه قرار نگرفته است.</p></div> :
-      visibleProducts.length ? <div className="product-grid">{visibleProducts.map(p=><article className="product-card" key={p.id}>
+      visibleProducts.length ? <div className="product-grid">{visibleProducts.map(p=><article className="product-card" key={p.id} role="link" tabIndex={0} onClick={() => window.location.href = `/plugin/${p.id}`} onKeyDown={e => { if (e.key === "Enter") window.location.href = `/plugin/${p.id}`; }}>
         <div className="product-icon">{p.icon_url ? <img src={p.icon_url} alt=""/> : <Package size={30}/>}<span>{p.is_free?"FREE":"PREMIUM"}</span></div>
         <div className="product-meta"><span>{p.category}</span><span>{p.platform.join(" / ")}</span></div>
         <h3>{p.name}</h3><p>{p.description}</p>
