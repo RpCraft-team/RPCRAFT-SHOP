@@ -31,15 +31,23 @@ body::after {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: .32;
+  opacity: .48;
   background-image:
-    radial-gradient(2px 2px at 12% 22%, #c5a6ff88 50%, transparent 100%),
-    radial-gradient(2px 2px at 78% 18%, #ffb36a88 50%, transparent 100%),
-    radial-gradient(1px 1px at 35% 65%, #ffffff99 50%, transparent 100%),
-    radial-gradient(2px 2px at 88% 72%, #b38aff88 50%, transparent 100%),
-    radial-gradient(1px 1px at 60% 42%, #ffd16699 50%, transparent 100%);
-  background-size: 310px 290px;
-  animation: rpcraft-stars 35s linear infinite;
+    radial-gradient(2px 2px at 5% 12%, #c5a6ff 55%, transparent 100%),
+    radial-gradient(2px 2px at 18% 42%, #ff9b45 55%, transparent 100%),
+    radial-gradient(1px 1px at 31% 18%, #ffffff 55%, transparent 100%),
+    radial-gradient(2px 2px at 44% 76%, #b38aff 55%, transparent 100%),
+    radial-gradient(2px 2px at 57% 32%, #ffd166 55%, transparent 100%),
+    radial-gradient(1px 1px at 69% 88%, #ffffff 55%, transparent 100%),
+    radial-gradient(2px 2px at 82% 14%, #ff9b45 55%, transparent 100%),
+    radial-gradient(2px 2px at 94% 57%, #c5a6ff 55%, transparent 100%),
+    radial-gradient(1px 1px at 12% 91%, #ffb36a 55%, transparent 100%),
+    radial-gradient(2px 2px at 37% 51%, #9b75ed 55%, transparent 100%),
+    radial-gradient(1px 1px at 63% 61%, #ffffff 55%, transparent 100%),
+    radial-gradient(2px 2px at 91% 94%, #ff9b45 55%, transparent 100%);
+  background-size: 220px 210px;
+  animation: rpcraft-stars 24s linear infinite;
+  will-change: background-position;
 }
 
 @keyframes rpcraft-ambient {
@@ -50,7 +58,7 @@ body::after {
 
 @keyframes rpcraft-stars {
   from { background-position: 0 0; }
-  to { background-position: 310px 290px; }
+  to { background-position: 220px 210px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
