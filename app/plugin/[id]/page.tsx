@@ -19,6 +19,7 @@ type Product = {
   icon_url: string | null;
   author_id: string;
   file_path: string;
+  download_count: number;
 };
 
 const money = (n: number) =>
@@ -85,6 +86,16 @@ export default function PluginDetails() {
       return;
     }
 
+    const { error: countError } = await supabase.rpc("record_plugin_download", {
+      p_product_id: product.id
+    });
+
+    if (!countError) {
+      setProduct({ ...product, download_count: (product.download_count || 0) + 1 });
+    } else {
+      setNotice("دانلود آماده شد، اما ثبت آمار دانلود ناموفق بود.");
+    }
+
     window.location.href = data.signedUrl;
     setBusy(false);
   }
@@ -118,6 +129,7 @@ export default function PluginDetails() {
           <div><small>نسخه پلاگین</small><b>{product.version}</b></div>
           <div><small>قیمت</small><b>{product.is_free ? "رایگان" : money(product.price)}</b></div>
           <div><small>نوع انتشار</small><b>{product.is_free ? "FREE" : "PREMIUM"}</b></div>
+          <div><small>تعداد دانلود</small><b>{(product.download_count || 0).toLocaleString("fa-IR")}</b></div>
         </div>
 
         <div className="plugin-detail-section">
