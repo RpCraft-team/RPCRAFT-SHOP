@@ -4,8 +4,6 @@ import { getShopEnv } from "@/lib/cloudflare/env";
 import { getSessionUser } from "@/lib/cloudflare/session";
 import { createSecurityCode, hashToken } from "@/lib/cloudflare/crypto";
 
-export const runtime = "edge";
-
 async function canManageUsers(request: NextRequest) {
   const token = request.cookies.get("rpcraft_session")?.value;
   const user = token ? await getSessionUser(token) : null;
