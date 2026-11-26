@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "rpcraft-shop-web",
+  "name": "shop",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-11-22",
   "compatibility_flags": ["nodejs_compat"],
