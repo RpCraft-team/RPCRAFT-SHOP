@@ -2,7 +2,7 @@ name: Validate RPCRAFT SHOP
 
 on:
   push:
-    branches: [main]
+    branches: [main, cloudflare-migration]
   workflow_dispatch:
 
 jobs:
