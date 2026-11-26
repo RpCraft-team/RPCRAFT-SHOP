@@ -79,6 +79,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: "This ticket is closed." }, { status: 409 });
     }
 
+    const notification = auth.staff
+      ? env.DB.prepare(`
+          INSERT INTO notifications (id, recipient_id, type, title, message, target_type, target_id)
+          VALUES (lower(hex(randomblob(16))), ?, 'ticket_reply',
+            'پاسخ جدید پشتیبانی', ?, 'ticket', ?)
+        `).bind(ticket.user_id, `برای تیکت شما پاسخ جدیدی ثبت شده است.`, id)
+      : env.DB.prepare(`
+          INSERT INTO notifications (id, recipient_id, type, title, message, target_type, target_id)
+          SELECT lower(hex(randomblob(16))), p.id, 'ticket_reply',
+            'پاسخ جدید به تیکت', ?, 'ticket', ?
+          FROM profiles p
+          LEFT JOIN admin_permissions ap ON ap.admin_id = p.id
+          WHERE p.role = 'owner'
+             OR (p.role = 'admin' AND COALESCE(ap.can_handle_tickets, 0) = 1)
+        `).bind(`کاربر در تیکت با شناسه ${id} پاسخ جدیدی ارسال کرده است.`, id);
+
     await env.DB.batch([
       env.DB.prepare(
         "INSERT INTO support_ticket_messages (id,ticket_id,sender_id,message,is_staff) VALUES (?,?,?,?,?)"
@@ -90,7 +106,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                       ELSE status END,
           updated_at=CURRENT_TIMESTAMP
         WHERE id=?
-      `).bind(auth.staff ? 1 : 0, auth.staff ? 1 : 0, id)
+      `).bind(auth.staff ? 1 : 0, auth.staff ? 1 : 0, id),
+      notification
     ]);
 
     return NextResponse.json({ success: true });

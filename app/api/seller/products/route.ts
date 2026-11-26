@@ -80,10 +80,21 @@ export async function POST(request: NextRequest){
       category, iconUrl, fileKey, status
     ).run();
 
-    await env.DB.prepare(`
-      INSERT INTO audit_logs (id, actor_id, action, target_type, target_id)
-      VALUES (?, ?, 'product_submitted', 'product', ?)
-    `).bind(crypto.randomUUID(), user.id, id).run();
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO audit_logs (id, actor_id, action, target_type, target_id)
+        VALUES (?, ?, 'product_submitted', 'product', ?)
+      `).bind(crypto.randomUUID(), user.id, id),
+      ...(status === "pending" ? [env.DB.prepare(`
+        INSERT INTO notifications (id, recipient_id, type, title, message, target_type, target_id)
+        SELECT lower(hex(randomblob(16))), p.id, 'product_submitted',
+          'پلاگین جدید برای بررسی', ?, 'product', ?
+        FROM profiles p
+        LEFT JOIN admin_permissions ap ON ap.admin_id = p.id
+        WHERE p.role = 'owner'
+           OR (p.role = 'admin' AND COALESCE(ap.can_review_products, 0) = 1)
+      `).bind(`پلاگین «${name}» برای بررسی ارسال شده است.`, id)] : [])
+    ]);
 
     return NextResponse.json({ success: true, productId: id, status }, { status: 201 });
   } catch {

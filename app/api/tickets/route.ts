@@ -27,6 +27,12 @@ export async function GET(request: NextRequest) {
     if (!auth.user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
     const env = await getShopEnv();
+    await env.DB.prepare(`
+      UPDATE support_tickets
+      SET status = 'closed', updated_at = CURRENT_TIMESTAMP
+      WHERE status != 'closed'
+        AND updated_at <= datetime('now', '-24 hours')
+    `).run();
     const status = request.nextUrl.searchParams.get("status");
     const validStatus = status && ["open", "in_progress", "waiting_user", "closed"].includes(status) ? status : null;
 
@@ -69,6 +75,12 @@ export async function POST(request: NextRequest){
     }
 
     const env = await getShopEnv();
+    await env.DB.prepare(`
+      UPDATE support_tickets
+      SET status = 'closed', updated_at = CURRENT_TIMESTAMP
+      WHERE status != 'closed'
+        AND updated_at <= datetime('now', '-24 hours')
+    `).run();
     const count = await env.DB.prepare(
       "SELECT COUNT(*) AS total FROM support_tickets WHERE user_id=? AND status!='closed'"
     ).bind(auth.user.id).first<{ total: number }>();
@@ -84,7 +96,16 @@ export async function POST(request: NextRequest){
       ).bind(id, auth.user.id, subject, category),
       env.DB.prepare(
         "INSERT INTO support_ticket_messages (id,ticket_id,sender_id,message,is_staff) VALUES (?,?,?,?,0)"
-      ).bind(crypto.randomUUID(), id, auth.user.id, message)
+      ).bind(crypto.randomUUID(), id, auth.user.id, message),
+      env.DB.prepare(`
+        INSERT INTO notifications (id, recipient_id, type, title, message, target_type, target_id)
+        SELECT lower(hex(randomblob(16))), p.id, 'ticket_created',
+          'تیکت پشتیبانی جدید', ?, 'ticket', ?
+        FROM profiles p
+        LEFT JOIN admin_permissions ap ON ap.admin_id = p.id
+        WHERE p.role = 'owner'
+           OR (p.role = 'admin' AND COALESCE(ap.can_handle_tickets, 0) = 1)
+      `).bind(`تیکت جدید «${subject}» ثبت شده است.`, id)
     ]);
 
     return NextResponse.json({ success: true, ticketId: id }, { status: 201 });

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const rate = await checkRateLimit(request, env, "auth:login", 10, 900, username);
     if (!rate.allowed) return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
     const user = await env.DB.prepare(`
-      SELECT u.id, u.password_hash, u.email_verified,
+      SELECT u.id, u.password_hash,
              p.username, p.role
       FROM users u
       JOIN profiles p ON p.id = u.id
@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
     `).bind(username).first<{
       id: string;
       password_hash: string;
-      email_verified: number;
       username: string;
       role: string;
     }>();
@@ -39,9 +38,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Incorrect username or password." }, { status: 401 });
     }
 
-    if (!user.email_verified) {
-      return NextResponse.json({ error: "Email verification is required before login." }, { status: 403 });
-    }
 
     if (user.role === "suspended") {
       return NextResponse.json({ error: "This account is suspended." }, { status: 403 });

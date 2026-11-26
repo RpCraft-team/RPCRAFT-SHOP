@@ -96,7 +96,16 @@ export async function POST(
       env.DB.prepare(`
         INSERT INTO audit_logs (id, actor_id, action, target_type, target_id)
         VALUES (?, ?, 'product_version_published', 'product', ?)
-      `).bind(crypto.randomUUID(), user.id, id)
+      `).bind(crypto.randomUUID(), user.id, id),
+      env.DB.prepare(`
+        INSERT INTO notifications (id, recipient_id, type, title, message, target_type, target_id)
+        SELECT lower(hex(randomblob(16))), p.id, 'plugin_version',
+          'نسخه جدید پلاگین', ?, 'product', ?
+        FROM profiles p
+        LEFT JOIN admin_permissions ap ON ap.admin_id = p.id
+        WHERE p.role = 'owner'
+           OR (p.role = 'admin' AND COALESCE(ap.can_review_products, 0) = 1)
+      `).bind(`نسخه ${version} برای پلاگین با شناسه ${id} منتشر شد.`, id)
     ]);
 
     return NextResponse.json({ success: true, versionId }, { status: 201 });

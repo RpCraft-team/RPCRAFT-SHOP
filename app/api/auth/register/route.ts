@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getShopEnv } from "@/lib/cloudflare/env";
 import { checkRateLimit } from "@/lib/cloudflare/rate-limit";
-import { hashPassword, hashToken, createSecurityCode } from "@/lib/cloudflare/crypto";
-import { sendSecurityCode } from "@/lib/cloudflare/email";
+import { hashPassword } from "@/lib/cloudflare/crypto";
 import { verifyTurnstile } from "@/lib/cloudflare/turnstile";
 
 export const runtime = "edge";
@@ -38,10 +37,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Human verification failed. Please try again." }, { status: 400 });
     }
 
-    if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL) {
-      return NextResponse.json({ error: "Email verification is temporarily unavailable." }, { status: 503 });
-    }
-
     const existing = await env.DB.prepare(`
       SELECT u.id FROM users u LEFT JOIN profiles p ON p.id = u.id
       WHERE u.email = ? COLLATE NOCASE OR p.username = ? COLLATE NOCASE OR p.phone = ? LIMIT 1
@@ -53,35 +48,24 @@ export async function POST(request: NextRequest) {
 
     const userId = crypto.randomUUID();
     const passwordHash = await hashPassword(password);
-    const code = createSecurityCode();
-    const codeHash = await hashToken(code);
 
-    await env.DB.prepare("INSERT INTO users (id,email,password_hash) VALUES (?,?,?)")
-      .bind(userId, email, passwordHash).run();
+    await env.DB.prepare(
+      "INSERT INTO users (id,email,password_hash,email_verified) VALUES (?,?,?,1)"
+    ).bind(userId, email, passwordHash).run();
 
     try {
-      await env.DB.prepare("INSERT INTO profiles (id,username,phone) VALUES (?,?,?)")
-        .bind(userId, username, phone).run();
-
-      await env.DB.prepare(`
-        INSERT INTO email_verification_codes (id,user_id,email,code_hash,purpose,expires_at)
-        VALUES (?,?,?,?, 'signup', datetime('now','+10 minutes'))
-      `).bind(crypto.randomUUID(), userId, email, codeHash).run();
-
-      await sendSecurityCode(env, email, code, "signup");
+      await env.DB.prepare(
+        "INSERT INTO profiles (id,username,phone) VALUES (?,?,?)"
+      ).bind(userId, username, phone).run();
     } catch (error) {
-      await env.DB.batch([
-        env.DB.prepare("DELETE FROM email_verification_codes WHERE user_id = ?").bind(userId),
-        env.DB.prepare("DELETE FROM profiles WHERE id = ?").bind(userId),
-        env.DB.prepare("DELETE FROM users WHERE id = ? AND email_verified = 0").bind(userId)
-      ]);
+      await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();
       throw error;
     }
 
     return NextResponse.json({
       success: true,
-      verificationRequired: true,
-      message: "A verification code has been sent to your email."
+      verificationRequired: false,
+      message: "Your account has been created. You can sign in now."
     }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Registration could not be completed. Please try again." }, { status: 500 });

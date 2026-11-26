@@ -18,6 +18,8 @@ export default function Home() {
   const [myProducts, setMyProducts] = useState<Product[]>([]);
   const [sellerApplications, setSellerApplications] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<any>(null);
   const [tab, setTab] = useState<"all" | "free" | "paid">("all");
@@ -212,6 +214,44 @@ export default function Home() {
     } catch (e: any) { setNotice(e.message); }
   }
 
+  async function loadNotifications() {
+    if (!profile || (profile.role !== "owner" && profile.role !== "admin")) return;
+    try {
+      const data = await api("/api/notifications");
+      setNotifications(data.notifications || []);
+    } catch (e: any) { setNotice(e.message); }
+  }
+
+  async function markNotificationRead(id: string) {
+    try {
+      await api("/api/notifications", {method:"PATCH", body:JSON.stringify({id})});
+      setNotifications(items => items.map(item => item.id === id ? {...item, is_read:1} : item));
+    } catch (e: any) { setNotice(e.message); }
+  }
+
+  async function loadResetRequests() {
+    if (!profile || (profile.role !== "owner" && !(profile.role === "admin" && myPermissions.can_manage_users))) return;
+    try {
+      const data = await api("/api/admin/password-resets");
+      setResetRequests(data.requests || []);
+    } catch (e: any) { setNotice(e.message); }
+  }
+
+  async function issueResetCode(requestId: string) {
+    if (!window.confirm("برای این درخواست کد بازیابی جدید ساخته شود؟")) return;
+    setBusy(true);
+    try {
+      const data = await api("/api/admin/password-resets", {
+        method:"POST",
+        body:JSON.stringify({requestId})
+      });
+      window.alert("ایمیل کاربر: " + data.email + "\\nکد یک‌بارمصرف: " + data.code + "\\nاعتبار: " + data.expiresInMinutes + " دقیقه\\nاین کد را دستی برای کاربر ایمیل کن.");
+      setNotice("کد بازیابی ساخته شد. آن را از طریق ایمیل برای کاربر بفرست.");
+      await loadResetRequests();
+    } catch (e: any) { setNotice(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function loadReports() {
     if (!profile || (profile.role !== "owner" && !(profile.role === "admin" && myPermissions.can_handle_reports))) return;
     try {
@@ -283,8 +323,10 @@ export default function Home() {
       loadPendingProducts();
       loadSellerApplications();
       loadReports();
+      loadNotifications();
+      loadResetRequests();
     }
-  }, [panel, profile?.id, profile?.role, myPermissions.can_review_products, myPermissions.can_review_sellers, myPermissions.can_handle_reports]);
+  }, [panel, profile?.id, profile?.role, myPermissions.can_review_products, myPermissions.can_review_sellers, myPermissions.can_handle_reports, myPermissions.can_manage_users]);
 
   async function promoteAdmin(userId: string) {
     setBusy(true);
@@ -515,7 +557,7 @@ export default function Home() {
             <a href={profile?.username ? `/profile/${encodeURIComponent(profile.username)}` : "#"} onClick={() => setAccountMenu(false)}>مشاهده پروفایل</a>
             {(profile?.role === "owner" || profile?.role === "seller") && <><button onClick={() => {setAccountMenu(false);loadMyProducts();setPanel("products");}}>محصولات من</button><button onClick={() => {setAccountMenu(false);setPanel("upload");}}>ثبت پلاگین جدید</button></>}
             {profile?.role === "owner" && <button onClick={() => {setAccountMenu(false);setPanel("settings");}}>تنظیمات مالک</button>}
-            {(profile?.role === "owner" || profile?.role === "admin") && <button onClick={() => {setAccountMenu(false);setPanel("admin");}}>پنل مدیریت</button>}
+            {(profile?.role === "owner" || profile?.role === "admin") && <button onClick={() => {setAccountMenu(false);setPanel("admin");}}>پنل مدیریت {notifications.filter(item => !item.is_read).length ? `(${notifications.filter(item => !item.is_read).length} اعلان جدید)` : ""}</button>}
             <button className="account-logout" onClick={() => {setAccountMenu(false);signOut();}}>خروج از حساب</button>
           </div>}
         </div> : <><button className="btn ghost small" onClick={() => {setAuthMode("login");setAuthOpen(true);}}><LogIn size={16}/> ورود</button><button className="btn primary small" onClick={() => {setAuthMode("signup");setAuthOpen(true);}}><UserPlus size={16}/> ثبت‌نام</button></>}
@@ -605,6 +647,19 @@ export default function Home() {
       </form></>}
       {panel==="settings" && <><div className="eyebrow">PRIVATE OWNER AREA</div><h2>تنظیمات مالک سایت</h2><div className="owner-warning"><ShieldCheck/> این بخش فقط برای حساب Owner قابل ویرایش است.</div>{settingsLoading ? <p className="form-hint">در حال دریافت تنظیمات...</p> : <form className="form-grid" onSubmit={e=>{e.preventDefault();saveSiteSettings();}}><label className="span-two">نام فروشگاه<input required maxLength={100} value={siteSettings.site_name} onChange={e=>setSiteSettings({...siteSettings,site_name:e.target.value})}/></label><label className="span-two">توضیحات فروشگاه<textarea rows={3} maxLength={500} value={siteSettings.site_description} onChange={e=>setSiteSettings({...siteSettings,site_description:e.target.value})}/></label><label className="span-two">لینک تلگرام پشتیبانی<input type="url" value={siteSettings.support_telegram} onChange={e=>setSiteSettings({...siteSettings,support_telegram:e.target.value})} placeholder="https://t.me/rpcraft_team"/></label><label className="check-label span-two"><input type="checkbox" checked={siteSettings.maintenance_mode} onChange={e=>setSiteSettings({...siteSettings,maintenance_mode:e.target.checked})}/> فعال‌سازی حالت تعمیرات سایت</label><p className="form-hint span-two">حالت تعمیرات پس از ذخیره فعال می‌شود؛ اعمال محدودیت دسترسی بازدیدکنندگان نیازمند اتصال این تنظیم به لایه دسترسی سایت است.</p><button className="btn primary span-two" type="submit" disabled={busy}>{busy?"در حال ذخیره...":"ذخیره تنظیمات"}</button></form>}</>}
       {panel==="admin" && <><div className="eyebrow">RPCRAFT CONTROL CENTER</div><h2>{profile?.role==="owner"?"پنل اختصاصی Owner":"پنل مدیریت"}</h2>
+        <h3>اعلان‌ها ({notifications.filter(item => !item.is_read).length} خوانده‌نشده)</h3>
+        {notifications.length ? <div className="settings-list">{notifications.map(item=><div key={item.id}>
+          <b>{item.title}</b><span>{item.message}</span><small>{item.created_at}</small>
+          {!item.is_read && <button className="btn outline small" onClick={()=>markNotificationRead(item.id)}>علامت‌گذاری به‌عنوان خوانده‌شده</button>}
+          {item.target_type === "password_reset" && <span>شناسه درخواست بازیابی: {item.target_id}</span>}
+        </div>)}</div> : <p className="form-hint">اعلانی وجود ندارد.</p>}
+        {(profile?.role==="owner" || (profile?.role==="admin" && myPermissions.can_manage_users)) && <>
+          <h3>درخواست‌های بازیابی رمز عبور ({resetRequests.length})</h3>
+          {resetRequests.length ? <div className="settings-list">{resetRequests.map(item=><div key={item.id}>
+            <b>{item.username} — {item.email}</b><span>تاریخ درخواست: {item.created_at}</span>
+            <button className="btn primary small" disabled={busy} onClick={()=>issueResetCode(item.id)}>ساخت کد و نمایش برای ارسال ایمیل</button>
+          </div>)}</div> : <p className="form-hint">درخواست بازیابی در انتظاری وجود ندارد.</p>}
+        </>}
         {profile?.role==="owner" ? <><div className="owner-warning"><ShieldCheck/> مدیریت حساب‌ها و سطح دسترسی مدیران فقط در اختیار Owner است.</div><h3>مدیران فعال ({adminUsers.length})</h3>
           {adminUsers.length ? <div className="settings-list">{adminUsers.map(admin=><div key={admin.id}><b>{admin.username}</b><span>شناسه: {admin.id}</span><button className="btn outline small" onClick={()=>loadAdminPermissions(admin.id)}>تنظیم مجوزها</button><button className="btn outline small" disabled={busy} onClick={()=>demoteAdmin(admin.id)}>لغو دسترسی Admin</button></div>)}</div> : <p className="form-hint">هنوز مدیری اضافه نشده است.</p>}
           {selectedAdmin && <div className="settings-list"><h3>مجوزهای مدیر انتخاب‌شده</h3>
