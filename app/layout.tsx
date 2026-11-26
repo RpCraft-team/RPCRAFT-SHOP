@@ -5,7 +5,6 @@ import { getSessionUser } from "@/lib/cloudflare/session";
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
-export const runtime = "edge";
 
 export const metadata: Metadata = {
   title: "RPCRAFT SHOP | بازار پلاگین ماینکرفت",

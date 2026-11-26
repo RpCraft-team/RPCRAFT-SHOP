@@ -4,7 +4,6 @@ import { checkRateLimit } from "@/lib/cloudflare/rate-limit";
 import { verifyPassword } from "@/lib/cloudflare/crypto";
 import { createSession } from "@/lib/cloudflare/session";
 
-export const runtime = "edge";
 
 export async function POST(request: NextRequest) {
   try {

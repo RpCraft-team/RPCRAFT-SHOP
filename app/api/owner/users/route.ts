@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getShopEnv } from "@/lib/cloudflare/env";
 import { getSessionUser } from "@/lib/cloudflare/session";
 
-export const runtime = "edge";
 
 async function getOwner(request: NextRequest) {
   const token = request.cookies.get("rpcraft_session")?.value;

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getShopEnv } from "@/lib/cloudflare/env";
 import { getSessionUser } from "@/lib/cloudflare/session";
 
-export const runtime = "edge";
 
 export async function GET(request: NextRequest) {
   try {

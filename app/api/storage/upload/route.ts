@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getShopEnv } from "@/lib/cloudflare/env";
 import { getSessionUser } from "@/lib/cloudflare/session";
 
-export const runtime = "edge";
 
 const MAX_JAR_SIZE = 100 * 1024 * 1024;
 const MAX_ICON_SIZE = 5 * 1024 * 1024;

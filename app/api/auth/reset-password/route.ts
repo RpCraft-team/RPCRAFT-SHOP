@@ -3,7 +3,6 @@ import { getShopEnv } from "@/lib/cloudflare/env";
 import { checkRateLimit } from "@/lib/cloudflare/rate-limit";
 import { hashPassword, hashToken } from "@/lib/cloudflare/crypto";
 
-export const runtime = "edge";
 
 export async function POST(request: NextRequest) {
   try {

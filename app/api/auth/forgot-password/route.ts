@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getShopEnv } from "@/lib/cloudflare/env";
 import { checkRateLimit } from "@/lib/cloudflare/rate-limit";
 
-export const runtime = "edge";
 
 export async function POST(request: NextRequest) {
   try {

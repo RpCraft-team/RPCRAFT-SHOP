@@ -3,7 +3,6 @@ import { getShopEnv } from "@/lib/cloudflare/env";
 import { getSessionUser } from "@/lib/cloudflare/session";
 import { guardMutation } from "@/lib/cloudflare/api-guard";
 
-export const runtime = "edge";
 
 async function authorized(request: NextRequest) {
   const token = request.cookies.get("rpcraft_session")?.value;

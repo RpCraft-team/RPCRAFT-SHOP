@@ -4,7 +4,6 @@ import { checkRateLimit } from "@/lib/cloudflare/rate-limit";
 import { hashPassword } from "@/lib/cloudflare/crypto";
 import { verifyTurnstile } from "@/lib/cloudflare/turnstile";
 
-export const runtime = "edge";
 
 export async function POST(request: NextRequest) {
   try {
