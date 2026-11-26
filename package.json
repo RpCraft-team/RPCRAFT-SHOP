@@ -4,26 +4,29 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "opennextjs-cloudflare build",
     "start": "next start",
     "lint": "tsc --noEmit",
     "preview": "opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare deploy"
   },
   "dependencies": {
-    "@opennextjs/cloudflare": "latest",
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.49.1",
+    "@opennextjs/cloudflare": "^1.20.19",
     "lucide-react": "^0.468.0",
     "next": "^15.1.6",
+    "postcss": "^8.5.33",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261125.1",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.3",
     "typescript": "^5.7.3",
     "wrangler": "latest"
+  },
+  "overrides": {
+    "postcss": "^8.5.33"
   }
 }

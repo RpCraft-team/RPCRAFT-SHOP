@@ -8,6 +8,20 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rpcraft-shop-db",
+      "database_id": "27ab2392-f7c0-4a1c-a754-fc2c18a86ff2",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSION_KV",
+      "id": "96f3c5cc554e49f395eefda1354050e3"
+    }
+  ],
   "observability": {
     "enabled": true
   }
